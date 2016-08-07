@@ -71,7 +71,7 @@ TierChecker.prototype.add_new_check = function(exclusive, tiers, checker) {
 };
 
 TierChecker.prototype.has_legal_team_for_tier = function(src, team, tier, silent, returncomp) {
-    if (tier == "Challenge Cup" || tier == "CC 1v1" || tier == "Wifi CC 1v1" || tier == "Inverted Challenge Cup" || tier == "Hackmons Challenge Cup" || (tier == "Battle Factory" || tier == "Battle Factory 6v6") && sys.gen(src, team) === 6) return true;
+    if (tier == "Challenge Cup" || tier == "CC 1v1" || tier == "Wifi CC 1v1" || tier == "Inverted Challenge Cup" || tier == "Hackmons Challenge Cup" || tier == "Hackmons CC 1v1" || tier == "Hackmons Wifi CC 1v1" || tier == "Hackmons Inverted CC" || (tier == "Battle Factory" || tier == "Battle Factory 6v6") && sys.gen(src, team) === 6) return true;
     if (!sys.hasLegalTeamForTier(src, team, tier)) return false;
 
     var complaints = [];
@@ -99,7 +99,7 @@ TierChecker.prototype.has_legal_team_for_tier = function(src, team, tier, silent
 
 TierChecker.prototype.find_good_tier = function(src, team) {
     // TODO: write up
-    var testPath = ["ORAS LC", "ORAS OU", "ORAS UU", "ORAS LU", "ORAS NU", "ORAS Ubers", "Anything Goes", "BW2 LC", "BW2 LC Ubers", "BW2 NU", "BW2 LU", "BW2 UU", "BW2 OU", "BW2 Ubers", "Battle Factory 6v6", "Challenge Cup", "ORAS Hackmons"];
+    var testPath = ["ORAS LC", "ORAS OU", "ORAS UU", "ORAS LU", "ORAS NU", "ORAS Ubers", "Anything Goes", "Battle Factory 6v6", "Challenge Cup", "ORAS Hackmons"];
     for (var i = 0; i < testPath.length; ++i) {
         var testtier = testPath[i];
         if (sys.hasLegalTeamForTier(src, team, testtier) && this.has_legal_team_for_tier(src, team, testtier, true)) {
@@ -115,7 +115,7 @@ TierChecker.prototype.find_good_tier = function(src, team) {
 var tier_checker = new TierChecker();
 var INCLUDING = false;
 var EXCLUDING = true;
-var challenge_cups = ["Challenge Cup", "CC 1v1", "Wifi CC 1v1", "Inverted Challenge Cup", "Hackmons Challenge Cup", "Battle Factory", "Battle Factory 6v6"];
+var challenge_cups = ["Challenge Cup", "CC 1v1", "Wifi CC 1v1", "Inverted Challenge Cup", "Hackmons Challenge Cup", "Battle Factory", "Battle Factory 6v6", "Hackmons CC 1v1", "Hackmons Wifi CC 1v1", "Hackmons Inverted CC"];
 var hackmons = ["ORAS Hackmons", "ORAS Balanced Hackmons", "Inverted Balanced Hackmons", "All Gen Hackmons"];
 
 /*Structure:
@@ -175,7 +175,7 @@ var eventMons = { //Try to keep in order of dex
     "Snivy": {"moves": {"Aromatherapy": {"natures": ["Hardy"]}}}
 };
 
-tier_checker.add_new_check(EXCLUDING, challenge_cups, function eventValidation(src, team) {
+tier_checker.add_new_check(EXCLUDING, challenge_cups.concat(hackmons), function eventValidation(src, team) {
     var ret = [];
     var events = Object.keys(eventMons);
     var restrAbs, currentAb;
@@ -282,9 +282,9 @@ tier_checker.add_new_check(EXCLUDING, challenge_cups, function endlessCheck(src,
     return ret;
 });
 
-/* Monogen no longer an official tier
+
 tier_checker.add_new_check(INCLUDING, ["Monogen"], function monoGenCheck(src, team) {
-    var GEN_MAX = [0, 151, 252, 386, 493, 649, 718];
+    var GEN_MAX = [0, 151, 252, 386, 493, 649, 721];
     var gen = 0;
     for (var i = 0; i < 6; ++i) {
         var pokenum = sys.teamPoke(src, team, i);
@@ -296,7 +296,7 @@ tier_checker.add_new_check(INCLUDING, ["Monogen"], function monoGenCheck(src, te
             return [sys.pokemon(pokenum) + " is not from Generation " + gen];
         }
     }
-});*/
+});
 
 /* Monocolor no longer an official tier
 tier_checker.add_new_check(INCLUDING, ["Monocolour"], function monoColourCheck(src, team) {
@@ -478,7 +478,7 @@ tier_checker.add_new_check(INCLUDING, ["ORAS Balanced Hackmons", "Inverted Balan
             if (abilities[ability]++ > 2) {
                 return ["You are not allowed more than 2 of any ability in this tier"];
             }
-        } else {
+        } else if (ability !== "(No Ability)") {
             abilities[ability] = 1;
         }
     }

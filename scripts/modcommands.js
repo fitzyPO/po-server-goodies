@@ -211,7 +211,7 @@ exports.handleCommand = function (src, command, commandData, tar, channel) {
            TABLE_LINE = '<tr><td>{0}</td><td>{1}</td><td>{2}</td></tr>';
            TABLE_END = '</table>';
         } else {
-           TABLE_HEADER = 'Range banned: IP subaddress, Command on rangeban';
+           TABLE_HEADER = 'Range banned: IP subaddress, Comment on rangeban';
            TABLE_LINE = ' || {0} / {1}';
            TABLE_END = '';
         }
@@ -244,7 +244,7 @@ exports.handleCommand = function (src, command, commandData, tar, channel) {
            TABLE_LINE = '<tr><td>{0}</td><td>{1}</td></tr>';
            TABLE_END = '</table>';
         } else {
-           TABLE_HEADER = 'Ip Banned: IP subaddress, Command on ipban';
+           TABLE_HEADER = 'Ip Banned: IP subaddress, Comment on ipban';
            TABLE_LINE = ' || {0} / {1}';
            TABLE_END = '';
         }
@@ -356,7 +356,7 @@ exports.handleCommand = function (src, command, commandData, tar, channel) {
             }
            TABLE_END = '</table>';
         } else {
-           TABLE_HEADER = 'Range banned: IP subaddress, Command on rangeban';
+           TABLE_HEADER = 'Range banned: IP subaddress, Comment on rangeban';
            TABLE_LINE = ' || {0} / {1}';
            TABLE_END = '';
         }
@@ -535,12 +535,12 @@ exports.handleCommand = function (src, command, commandData, tar, channel) {
                         version = " (v" + version.charAt(0) + "." + version.charAt(1) + "." + version.charAt(2) + (version.charAt(3) !== 0 ? version.charAt(3) : "") + ")";
                     } else if (sys.os(tar) === "android") {
                         //could be redone better probably
-                        var verArr = ["6.2","6.1","6.0","5.2","5.1","5.0","4.4"];
-                        var x = 53 - version;
+                        var verArr = ["6.4", "6.3", "6.2","6.1","6.0","5.2","5.1","5.0","4.4"];
+                        var x = 45 + verArr.length - version; //45 is essentially the last google play version
                         if (x < 0) {
                             version = " (later than v2.6.2)";
                         } else if (x > verArr.length) {
-                            version = " (earlier than v2.4.4)";
+                            version = " (earlier than v2.4.4 [" + version + "])";
                         } else {
                             version = " (v2." + verArr[x] + ")";
                         }

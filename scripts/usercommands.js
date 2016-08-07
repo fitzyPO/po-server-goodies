@@ -26,6 +26,9 @@ exports.handleCommand = function (src, command, commandData, tar, channel) {
             if (sys.auth(src) > 2 || isSuperAdmin(src)) {
                 sys.sendMessage(src, "/commands owner: To know of owner commands", channel);
             }
+            if (require("autoteams.js").isAutoTeamsAuth(src)) {
+                sys.sendMessage(src, "/commands autoteams: To know of autoteams commands", channel);
+            }
             var module, pluginhelps = getplugins("help-string");
             for (module in pluginhelps) {
                 if (pluginhelps.hasOwnProperty(module)) {
@@ -631,7 +634,11 @@ exports.handleCommand = function (src, command, commandData, tar, channel) {
             case "landorus-therian": commandData = "Landorus-T"; break;
             case "kyurem-black": commandData = "Kyurem-B"; break;
             case "kyurem-white": commandData = "Kyurem-W"; break;
-            default: commandData = commandData;
+            case "porygonz":
+            case "porygon z": commandData = "Porygon-Z"; break;
+            case "porygon-2":
+            case "porygon 2": commandData = "Porygon2"; break;
+            default: commandData = commandData.replace(/flabebe/i, "Flabébé");
         }
         return commandData;
     }
@@ -646,6 +653,19 @@ exports.handleCommand = function (src, command, commandData, tar, channel) {
         commandData = commandData[0];
         var pokeId;
         if (isNaN(commandData)) {
+            switch (commandData.toLowerCase()) {
+                case ("darmanitan-z") :
+                    commandData = "Darmanitan-D";
+                    break;
+                case ("meloetta-p") :
+                    commandData = "Meloetta-S";
+                    break;
+                case ("hoopa-u") :
+                    commandData = "Hoopa-B";
+                    break;
+                default:
+                    commandData=commandData;
+            }
             pokeId = sys.pokeNum(commandData);
         } else {
             if (commandData < 1 || commandData > 721) {
@@ -707,7 +727,7 @@ exports.handleCommand = function (src, command, commandData, tar, channel) {
                 sys.sendHtmlMessage(src, data[x], channel);
             }
         }
-                
+
         var stone = 0, aforme;
         if (commandData.indexOf(" ") !== -1) {
             stone = sys.stoneForForme(pokeId);
@@ -718,7 +738,7 @@ exports.handleCommand = function (src, command, commandData, tar, channel) {
             if (sys.isAesthetic(pokeId)) {
                 pokeId = sys.pokeNum(aforme[0]);
             }
-        }       
+        }
         var tiers = ["ORAS Ubers", "ORAS OU", "ORAS UU", "ORAS LU", "ORAS NU", "ORAS LC"];
         var allowed = [];
         for (var x = 0; x < tiers.length; x++) {
@@ -739,7 +759,7 @@ exports.handleCommand = function (src, command, commandData, tar, channel) {
             normalbot.sendMessage(src, "No such pokemon!", channel);
             return;
         }
-        
+
         var stone = 0, aforme;
         if (commandData.indexOf(" ") !== -1) {
             stone = sys.stoneForForme(pokeId);
@@ -977,12 +997,16 @@ exports.handleCommand = function (src, command, commandData, tar, channel) {
             return;
         }*/
         var now = (new Date()).getTime();
-        if (now < SESSION.users(src).inviteDelay) {
-            normalbot.sendMessage(src, "Please wait before sending another invite!");
+        if (typeof SESSION.users(tar).inviteBattleDelay === "object" && SESSION.users(tar).inviteBattleDelay.hasOwnProperty(sys.ip(src)) && now < SESSION.users(tar).inviteBattleDelay[sys.ip(src)]) {
+            normalbot.sendMessage(src, "Please wait before sending another battle invite!", channel);
             return;
         }
-        sys.sendHtmlMessage(tar, "<font color='brown'><timestamp/><b>±Sentret:  </b></font><a href='po:watchplayer/" + sys.name(src) + "'><b>" + utilities.html_escape(sys.name(src)) + "</b> would like you to watch their battle!</a>");
-        SESSION.users(src).inviteDelay = (new Date()).getTime() + 10000;
+        normalbot.sendMessage(src, "You invited " + sys.name(tar) + " to watch your battle.", channel);
+        sys.sendHtmlMessage(tar, "<font color='brown'><timestamp/><b>±Sentret: </b></font><a href='po:watchplayer/" + sys.name(src) + "'><b>" + utilities.html_escape(sys.name(src)) + "</b> would like you to watch their battle!</a>");
+        if (typeof SESSION.users(tar).inviteBattleDelay !== "object") {
+            SESSION.users(tar).inviteBattleDelay = {};
+        }
+        SESSION.users(tar).inviteBattleDelay[sys.ip(src)] = (new Date()).getTime() + 10000;
         return;
     }
     if (command === "notice") {
