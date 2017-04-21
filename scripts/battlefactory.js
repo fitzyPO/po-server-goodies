@@ -14,7 +14,7 @@ Files: bfteams.json
 /* globals sendChanAll, bfbot, staffchannel, tier_checker, sendChanHtmlAll, sys, Config, SESSION, require, module */
 
 // Globals
-var bfVersion = "1.200";
+var bfVersion = "1.300";
 var dataDir = "scriptdata/bfdata/";
 var submitDir = dataDir + "submit/";
 var bfSets, working, defaultSets, userQueue, reviewChannel, submitBans, bfHash, reviewers;
@@ -24,7 +24,7 @@ var battleFactoryTiers = ["Battle Factory", "Battle Factory 6v6"];
 var lcTiers = [
     "RBY LC", "GSC LC", "Adv LC",
     "HGSS LC", "HGSS LC Ubers", "BW2 LC",
-    "BW2 LC Ubers", "ORAS LC"
+    "BW2 LC Ubers", "ORAS LC", "SM LC"
 ];
 
 // Will escape "&", ">", and "<" symbols for HTML output.
@@ -252,7 +252,8 @@ function pokeCodeToPokemon(pokeCode) {
         "gen": sys.generation(toNumber(pokeCode.substr(37, 1)),
                               toNumber(pokeCode.substr(38, 1))),
         "genNum": toNumber(pokeCode.substr(37, 1)),
-        "subgenNum": toNumber(pokeCode.substr(38, 1))
+        "subgenNum": toNumber(pokeCode.substr(38, 1)),
+        "hiddenPowerType": pokeCode.length === 40 ? toNumber(pokeCode.substr(39, 1)) : 16
     };
 }
 
@@ -274,6 +275,7 @@ function pokemonToPokeCode(pokemon) {
         pokeCode += toChars(pokemon.dvs[d], 1);
     }
     pokeCode += toChars(pokemon.genNum, 1) + toChars(pokemon.subgenNum, 1);
+    pokeCode += toChars(pokemon.hiddenPowerType, 1);
     return pokeCode;
 }
 
@@ -531,6 +533,8 @@ function factoryCommand(src, command, commandData, channel) {
             };
             if (args.length === 2) {
                 template.mode = args[1];
+            } else {
+                template.mode = "Singles";
             }
             createEntry(tier, template, "No URL for addtier");
             autoSave("teams", tier);
@@ -806,7 +810,7 @@ function factoryCommand(src, command, commandData, channel) {
                 }
             }
             var maxSubmissions = isReviewer(src) ? 100 : 15;
-            if (isReviewAdmin(src) && submissions >= maxSubmissions) {
+            if (!isReviewAdmin(src) && submissions >= maxSubmissions) {
                 bfbot.sendMessage(src, "You already have " + maxSubmissions + " or more submissions in the queue, please wait until they get reviewed!", channel);
             } else {
                 var team = [];
@@ -835,7 +839,8 @@ function factoryCommand(src, command, commandData, channel) {
                             "evs": evs,
                             "dvs": dvs,
                             "genNum": sys.gen(src, 0),
-                            "subgenNum": sys.subgen(src, 0)
+                            "subgenNum": sys.subgen(src, 0),
+                            "hiddenPowerType": sys.teamPokeHiddenPower(src, 0, x)
                         });
                         if (!setIsDuplicate(pokeCode, tier)) {
                             team.push({
@@ -850,7 +855,11 @@ function factoryCommand(src, command, commandData, channel) {
                     }
                 }
                 if (team.length === 0) {
-                    bfbot.sendMessage(src, "You have no Pokemon that can be submitted!", channel);
+                    if (setIsDuplicate(pokeCode, tier)) {
+                        bfbot.sendMessage(src, "This set already exists in " + tier + ".");
+                    } else {
+                        bfbot.sendMessage(src, "You have no Pokemon that can be submitted!", channel);
+                    }
                 } else {
                     if (!userQueue.hasOwnProperty(tier)) {
                         userQueue[tier] = [];
@@ -931,7 +940,7 @@ function factoryCommand(src, command, commandData, channel) {
         }
     } else if (command === "savesets") {
         autoSave("all", "");
-        bfbot.sendMessage(src, "Saved user generated sets!", channel);
+        bfbot.sendAll("Saved user generated sets!", channel);
     } else if (command === "deleteset") {
         args = commandData.split(":");
         tier = find_pack(args[0]);
@@ -1213,7 +1222,7 @@ function setLint(checkFile) {
                         }
                     }
                 } catch (error) {
-                    errors.push("<td>Bad Set</td><td>Property '" + html_escape(property) + "'; expected 39 character alphanumeric strings.</td>");
+                    errors.push("<td>Bad Set</td><td>Property '" + html_escape(property) + "'; expected 39 or 40 character alphanumeric strings.</td>");
                 }
             }
         } else if (["readable", "desc", "mode", "perfectivs", "maxpokes"].indexOf(property) < 0) {
@@ -1262,8 +1271,8 @@ function printLintResults(src, lintResults, channel) {
 
 // converts a set code to a readable format, or importable. The lineBreak parameter defaults to "<br />"
 function getReadablePoke(setCode, lineBreak) {
-    if (setCode.length !== 39) {
-        throw "Invalid Set, each set should be 39 alphanumeric characters long.";
+    if (setCode.length < 39 || setCode.length > 40) {
+        throw "Invalid Set, each set should be 39 or 40 alphanumeric characters long.";
     }
     lineBreak = lineBreak || "<br />";
     var stats = ["HP", "Atk", "Def", "SAtk", "SDef", "Spd"];
@@ -1295,8 +1304,8 @@ function getReadablePoke(setCode, lineBreak) {
     readablePoke += lineBreak;
     for (var m = 0; m < 4; m++) {
         if (info.moves[m] === "Hidden Power") {
-            var hpType = sys.hiddenPowerType(5, info.dvs[0], info.dvs[1], info.dvs[2],
-                                                info.dvs[3], info.dvs[4], info.dvs[5]);
+            var hpType = info.gen < 7 ? sys.hiddenPowerType(5, dvs[0], dvs[1], dvs[2], dvs[3], dvs[4], dvs[5]) :
+                                                info.hiddenPowerType;
             readablePoke += "- Hidden Power [" + sys.type(hpType) + "]" + lineBreak;
         } else if (info.moves[m] !== "(No Move)") {
             readablePoke += "- " + info.moves[m] + lineBreak;
@@ -1383,8 +1392,8 @@ function getPokePreview(src, team, poke) {
     for (var m = 0; m < 4; m++) {
         moves.push(sys.move(sys.teamPokeMove(src, team, poke, m)));
         if (moves[m] === "Hidden Power") {
-            var hpType = sys.hiddenPowerType(5, dvs[0], dvs[1], dvs[2],
-                                                dvs[3], dvs[4], dvs[5]);
+            var hpType = sys.gen(src, team) < 7 ? sys.hiddenPowerType(5, dvs[0], dvs[1], dvs[2], dvs[3], dvs[4], dvs[5]) :
+                                                sys.teamPokeHiddenPower(src, team, poke);
             moves[m] += " [" + sys.type(hpType) + "]";
         }
     }
@@ -1415,6 +1424,18 @@ function isMegaStone(item) {
         item = sys.itemNum(item);
     }
     return item > 2000 && item < 3000 && sys.item(item);
+}
+
+function zFilter(set) {
+    return this.zCount < this.zLimit || !isZCrystal(set.itemId);
+}
+
+function isZCrystal(item) {
+    if (isNaN(item)) {
+        item = sys.itemNum(item);
+    }
+    
+    return item >= 3000 && item <= 3028 && sys.item(item);
 }
 
 function isHazard(move) {
@@ -1469,6 +1490,7 @@ function missingNoLast(p1, p2) {
 
 function generateTeam(src, team, tier) {
     var megaLimit = 1, megaCount = 0;
+    var zLimit = 1, zCount = 0;
     var hazardsLimit = 2;
     var moveCounts = {};
     try {
@@ -1486,20 +1508,21 @@ function generateTeam(src, team, tier) {
             while (!pokemonAdded && pokeArray.length > 0) {
                 var poke = pokeArray.splice(sys.rand(0, pokeArray.length), 1)[0];
                 var filteredSets = pack[poke].map(setToPokemon);
-                filteredSets = filteredSets.filter(megaFilter, {
-                    "megaCount": megaCount,
-                    "megaLimit": megaLimit
-                });
-                filteredSets = filteredSets.filter(hazardLimitFilter, {
-                    "maxHazards": hazardsLimit - totalHazards(moveCounts),
-                    "moveCounts": moveCounts
-                });
+                filteredSets = filteredSets
+                                   .filter(megaFilter, { "megaCount": megaCount, "megaLimit": megaLimit })
+                                   .filter(zFilter, { "zLimit": zLimit, "zCount": zCount })
+                                   .filter(hazardLimitFilter, { "maxHazards": hazardsLimit - totalHazards(moveCounts), "moveCounts": moveCounts });
+
                 // make sure to add some sort of hazard control if none exists
                 if (p === 5 && totalHazards(moveCounts) === 0) {
                     filteredSets = filteredSets.filter(hazardControlOnlyFilter);
                 }
                 if (filteredSets.length > 0) {
-                    teamInfo[p] = filteredSets[sys.rand(0, filteredSets.length)];
+                    var tmp = filteredSets[sys.rand(0, filteredSets.length)];
+                    if (sys.isPokeBannedFromTier(tmp.pokeId, tier)) {
+                        continue;
+                    }
+                    teamInfo[p] = tmp;
                     pokemonAdded = true;
                 } else {
                     badPokeArray.push(poke);
@@ -1517,6 +1540,9 @@ function generateTeam(src, team, tier) {
             if (isMegaStone(teamInfo[p].itemId)) {
                 megaCount += 1;
             }
+            if (isZCrystal(teamInfo[p].itemId)) {
+                zCount += 1;
+            }
             for (var c = 0; c < 4; c++) {
                 moveCounts[teamInfo[p].moves[c]] = (moveCounts[teamInfo[p].moves[c]] || 0) + 1;
             }
@@ -1531,7 +1557,9 @@ function generateTeam(src, team, tier) {
             sys.changePokeNature(src, team, s, pokeData.natureId);
             sys.changePokeAbility(src, team, s, pokeData.abilityId);
             sys.changePokeItem(src, team, s, pokeData.itemId);
-            var shuffledMoves = ((pokeData.moveIds.slice()).shuffle()).sort(noMoveLast);
+            sys.changePokeHiddenPower(src, team, s, pokeData.hiddenPowerType);
+            //                                         Conversion                  Normalium Z
+            var shuffledMoves = pokeData.moveIds.contains(160) && pokeData.itemId === 3000 ? pokeData.moveIds : ((pokeData.moveIds.slice()).shuffle()).sort(noMoveLast); // Z-Conversion
             for (var m = 0; m < 4; m++) {
                 sys.changePokeMove(src, team, s, m, shuffledMoves[m]);
             }
@@ -1750,7 +1778,7 @@ module.exports = {
                 for (var pack in bfHash) {
                     if (bfHash[pack].enabled && bfHash[pack].active) {
                         allowedTypes.push(pack);
-                        if (bfSets[pack].hasOwnProperty("mode") && bfSets[pack].mode === modes[mode]) {
+                        if (bfSets[pack].hasOwnProperty("mode") && script.cmp(bfSets[pack].mode, modes[mode])) {
                             suggestedTypes.push(pack);
                         } else if (bfSets[pack].hasOwnProperty("maxpokes") && bfSets[pack].maxpokes === 6
                                    && sys.tier(src, srcteam) === sys.tier(dest, destteam)
@@ -1858,6 +1886,10 @@ module.exports = {
         // generate a team for players with no Pokemon
         generateTeam(src, team, "preset");
         return true;
+    },
+    saveSets: function() {
+        autoSave("all", "");
+        bfbot.sendAll("Saved user generated sets!", reviewChannel);
     },
     "help-string": ["battlefactory: To know the battlefactory commands"]
 };

@@ -105,10 +105,10 @@ AutoTeams.natureInfo = function(nature) {
     return info;
 };
 
-AutoTeams.moveInfo = function(move, ivs, gen) {
+AutoTeams.moveInfo = function(move, ivs, gen, hpType) {
     var info = sys.move(move);
     if (info === "Hidden Power") {
-        info += " [" + sys.type(sys.hiddenPowerType(gen, ivs[0], ivs[1], ivs[2], ivs[3], ivs[4], ivs[5])) + "]";
+        info += " [" + (hpType && gen >= 7 ? sys.type(hpType) : sys.type(sys.hiddenPowerType(gen, ivs[0], ivs[1], ivs[2], ivs[3], ivs[4], ivs[5]))) + "]";
     }
     return "- " + info;
 };
@@ -170,7 +170,7 @@ AutoTeams.teamImportable = function(teamName, tier) {
         for (var m = 0; m < 4; m++) {
             if (team[p].moves[m] !== 0) {
                 importable += this.moveInfo(
-                    team[p].moves[m], team[p].ivs, gen) + "\n";
+                    team[p].moves[m], team[p].ivs, gen, team[p].hiddenpower) + "\n";
             }
         }
     }
@@ -252,7 +252,8 @@ AutoTeams.addTeam = function(teamName, tier, player) {
             "shiny": sys.teamPokeShine(player, teamIndex, p),
             "ivs": [],
             "evs": [],
-            "moves": []
+            "moves": [],
+            "hiddenpower": sys.teamPokeHiddenPower(player, teamIndex, p)
         };
         for (var s = 0; s < 6; s++) {
             pokemon.evs.push(sys.teamPokeEV(player, teamIndex, p, s));
@@ -314,6 +315,9 @@ AutoTeams.giveTeam = function(player, slot, tier) {
                 Math.max(1, Math.min(sys.maxLevelOfTier(tier), team[i].level)));
             sys.changePokeShine(player, slot, i, team[i].shiny);
             sys.changePokeGender(player, slot, i, team[i].gender);
+            if (team[i].hasOwnProperty("hiddenpower")) {
+                sys.changePokeHiddenPower(player, slot, i, team[i].hiddenpower);
+            }
             if (team[i].moves.indexOf(216) > -1) {
                 // Return
                 sys.changePokeHappiness(player, slot, i, 255);
@@ -342,10 +346,54 @@ AutoTeams.isAutoTeamsAuth = function(player) {
     return require("tours.js").isTourOwner(player) || (sys.auth(player) >= 2 && sys.dbRegistered(sys.name(player)));
 };
 
-AutoTeams.handleCommand = function(player, message, channel) {
-    if (!this.isAutoTeamsAuth(player)) {
-        return false;
+AutoTeams.isAutoTeamsReviewer = function(player) {
+    return this.isAutoTeamsAuth(player) || script.autoteamsAuth.has(sys.name(player).toLowerCase());
+};
+
+AutoTeams.changeReviewers = function(name, remove) {
+    if (!name) {
+        throw "Enter a valid user!";
     }
+    if (!sys.dbIp(name)) {
+        throw "This user doesn't exist.";
+    }
+    if (!sys.dbRegistered(name)) {
+        throw "This user isn't registered!";
+    }
+    
+    var hasName = script.autoteamsAuth.has(name.toLowerCase());
+    if (remove) {
+        if (!hasName) {
+            throw "This user is not an autoteam reviewer.";
+        }
+        script.autoteamsAuth.remove(name.toLowerCase());
+        return "Removed " + name.toCorrectCase() + " from autoteam reviewers.";
+    }
+    if (hasName) {
+        throw "This user is already an autoteam reviewer.";
+    }
+    script.autoteamsAuth.add(name.toLowerCase(), "");
+    return "Added " + name.toCorrectCase() + " to autoteam reviewers.";
+};
+
+AutoTeams.handleCommand = function(player, message, channel) {
+    var authCommands = [
+        "addautoreviewer",
+        "removeautoreviewer",
+        "addautotier",
+        "removeautotier"
+    ];
+
+    var reviewCommands = [
+        "autoteamsreview",
+        "autotiers",
+        "autoteams",
+        "addautoteam",
+        "removeautoteam",
+        "viewautoteam",
+        "setautoteam"
+    ];
+
     var command, commandData;
     var split = message.indexOf(" ");
     if (split > -1) {
@@ -355,11 +403,24 @@ AutoTeams.handleCommand = function(player, message, channel) {
         command = message.toLowerCase();
         commandData = "";
     }
+
+    if (!(reviewCommands.indexOf(command) > -1 && this.isAutoTeamsReviewer(player)) &&
+        !(authCommands.indexOf(command) > -1 && this.isAutoTeamsAuth(player))) {
+        return false;
+    }
+
     commandData = commandData.split(":");
-    var team;
-    var tier;
+    var team, tier;
     try {
-        if (command === "addautoteam") {
+        if (command === "addautoreviewer" || command === "removeautoreviewer") {
+            teamsbot.sendMessage(player, this.changeReviewers(commandData[0], command === "removeautoreviewer"), channel);   
+        } else if (command === "autoteamsreview") {
+            var reviewers = [], x;
+            for (x in script.autoteamsAuth.hash) {
+                reviewers.push(x);
+            }
+            sys.sendMessage(player, "±Reviewers: " + reviewers.sort().join(", "), channel);
+        } else if (command === "addautoteam") {
             if (commandData.length !== 2) {
                 throw "Usage: /addautoteam [team name]:[tier]";
             }
@@ -427,15 +488,18 @@ AutoTeams.handleCommand = function(player, message, channel) {
     return true;
 };
 
-AutoTeams.help = [
-    "",
-    "*** AutoTeams Commands ***",
-    "/addautoteam [team name]:[tier]: Adds an autoteam.",
-    "/removeautoteam [team name]:[tier]: Removes an autoteam.",
-    "/addautotier [tier]: Adds a tier for autoteams.",
-    "/removeautotier [tier]: Removes a tier for autoteams (keeps data files intact).",
+AutoTeams.authHelp = [
+    "*** AutoTeams Auth Commands ***",
+    "/[add/remove]autoreviewer [user]: Adds/removes a user from autoteam reviewers.",
+    "/[add/remove]autotier [tier]: Adds/removes a tier for autoteams."
+];
+
+AutoTeams.reviewHelp = [
+    "*** AutoTeams Reviewer Commands ***",
+    "/autoteamsreview: Lists users who may add autoteams.",
     "/autotiers: Lists tiers with autoteams.",
     "/autoteams [tier]: Lists autoteams for a tier. Includes all tiers when no tier is specified.",
+    "/[add/remove]autoteam [team name]:[tier]: Adds/removes an autoteam.",
     "/viewautoteam [team name]:[tier]: Displays an autoteam as an importable.",
     "/setautoteam [tier]: Sets a random autoteam to your first team slot (debug use)."
 ];
@@ -443,12 +507,18 @@ AutoTeams.help = [
 // AutoTeams["help-string"] = ["autoteams: To know the autoteams commands"];
 
 AutoTeams.onHelp = function(player, topic, channel) {
-    if (topic !== "autoteams" || !this.isAutoTeamsAuth(player)) {
+    if (topic !== "autoteams" || !this.isAutoTeamsReviewer(player)) {
         return false;
     }
-    for (var i = 0; i < this.help.length; i++) {
-        sys.sendMessage(player, this.help[i], channel);
+    
+    var help = [""].concat(this.reviewHelp);
+    if (this.isAutoTeamsAuth(player)) {
+        help = help.concat(this.authHelp);
     }
+    
+    help.forEach(function(line) {
+        sys.sendMessage(player, line, channel);
+    });
     return true;
 };
 
