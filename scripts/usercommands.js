@@ -60,6 +60,24 @@ exports.handleCommand = function (src, command, commandData, tar, channel) {
         callplugins("onHelp", src, commandData, channel);
         return;
     }
+    if (command === "guide" || command === "guides") {
+        var os = commandData, unsupported;
+        if (!os) {
+            os = sys.os(src);
+            unsupported = os === "android" && sys.version(src) < 52;
+        }
+        os = os.toLowerCase();
+        if (!script.userGuides(os)) {
+            normalbot.sendMessage(src, "No guides found for \"" + os + "\"!", channel);
+            return;
+        }
+        if (unsupported) {
+            normalbot.sendMessage(src, "User guides for " + os + ": " + script.userGuides(os, unsupported), channel);
+            return;
+        }
+        normalbot.sendHtmlMessage(src, "User guides for " + os + ": " + script.userGuides(os), channel);
+        return;
+    }
     if (command === "intier") {
         if (commandData === undefined) {
             battlebot.sendMessage(src, "Please enter a tier.", channel);
@@ -85,7 +103,7 @@ exports.handleCommand = function (src, command, commandData, tar, channel) {
             battlebot.sendMessage(src, "No unidled players found in that tier.", channel);
         } else {
             var sliceAmount = 10,
-                users = arraySlice(usersFoundArray.shuffle(), sliceAmount).join(", ");
+            users = arraySlice(usersFoundArray.shuffle(), sliceAmount).join(", ");
             battlebot.sendMessage(src, "Found " + usersFoundArray.length + "/" + sliceAmount + " unidled random players in " + tierInput + ": " + users, channel);
         }
         return;
@@ -106,7 +124,7 @@ exports.handleCommand = function (src, command, commandData, tar, channel) {
             sys.stopEvent();
             return;
         }
-        if (SESSION.users(src).smute.active) {
+        if (SESSION.users(src).smute.active && sys.auth(src) < 1) {
             sys.playerIds().forEach(function (id) {
                 if (sys.loggedIn(id) && SESSION.users(id).smute.active && sys.isInChannel(src, channel)) {
                     var colour = script.getColor(src);
@@ -199,17 +217,63 @@ exports.handleCommand = function (src, command, commandData, tar, channel) {
             require("mafia.js").showRules(src, channel);
             return;
         }
-        var norules = (rules.length - 1) / 2; //formula for getting the right amount of rules
-        if (commandData !== undefined && !isNaN(commandData) && commandData > 0 && commandData < norules) {
-            var num = parseInt(commandData, 10);
-            num = (2 * num) + 1; //gets the right rule from the list since it isn't simply y=x it's y=2x+1
-            sys.sendMessage(src, rules[num], channel);
-            sys.sendMessage(src, rules[num + 1], channel);
+        var language = "english";
+        var num;
+        var translateLang = function(str) {
+            var ret;
+            switch (str.toLowerCase()) {
+                case "spanish":
+                case "espanol":
+                case "español":
+                    ret = "spanish";
+                    break;
+                case "chinese":
+                case "中文":
+                    ret = "chinese";
+                    break;
+                case "french":
+                case "francais":
+                case "français":
+                    ret = "french";
+                    break;
+                default:
+                    ret = "english";
+                    break;
+            }
+            return ret;
+        };
+        if (commandData) {
+            var data = commandData.indexOf(":") > -1 ? commandData.split(":"):commandData;
+            if (!isNaN(data) && script.rules.hasOwnProperty(data)) {
+                num = data;
+            }
+            else if (!Array.isArray(data)) {
+                language = translateLang(data);
+            }
+            else {
+                if (data[0]) {
+                    language = translateLang(data[0]);
+                }
+                if (data[1]) {
+                    if (script.rules.hasOwnProperty(data[1])) {
+                        num = data[1];
+                    }
+                }
+            }
+        }
+        if (num) {
+            for (var e in script.rules[num][language]) {
+                sys.sendMessage(src, script.rules[num][language][e], channel);
+            }
             return;
         }
-        var rule;
-        for (rule = 0; rule < rules.length; rule++) {
-            sys.sendMessage(src, rules[rule], channel);
+        sys.sendMessage(src, "", channel);
+        sys.sendMessage(src, "*** Pokémon Online Server Rules ***", channel);
+        sys.sendMessage(src, "", channel);  
+        for (var num in script.rules) {
+            for (var e in script.rules[num][language]) {
+                sys.sendMessage(src, script.rules[num][language][e], channel);
+            }
         }
         return;
     }
@@ -283,19 +347,20 @@ exports.handleCommand = function (src, command, commandData, tar, channel) {
         return;
     }
     if (command === "auth") {
-        var doNotShowIfOffline = ["loseyourself", "oneballjay"];
+        var doNotShow = ["[ld]jirachier", "blinky"];
         var filterByAuth = function (level) {
             return function (name) {
                 return sys.dbAuth(name) === level;
             };
         };
         var printOnlineOffline = function (name) {
+            name = name.toLowerCase();
             if (sys.id(name) === undefined) {
-                if (doNotShowIfOffline.indexOf(name) === -1) {
-                    sys.sendMessage(src, name, channel);
-                }
+                sys.sendMessage(src, name, channel);
             } else {
-                sys.sendHtmlMessage(src, "<timestamp/><font color = " + script.getColor(sys.id(name)) + "><b>" + name.toCorrectCase() + "</b></font>", channel);
+                if (doNotShow.indexOf(name) === -1) {
+                    sys.sendHtmlMessage(src, "<timestamp/><font color = " + script.getColor(sys.id(name)) + "><b>" + name.toCorrectCase() + "</b></font>", channel);
+                }
             }
         };
         var authListArray = sys.dbAuths().sort();
@@ -420,7 +485,7 @@ exports.handleCommand = function (src, command, commandData, tar, channel) {
         var team = script.importable(src, teamNumber, true).join("\n");
         var fileName = sys.time() + "-" + sys.rand(1000, 10000) + ".txt";
         sys.writeToFile("usage_stats/formatted/team/" + fileName, team);
-        normalbot.sendMessage(src, "You team can be found here: http://server.pokemon-online.eu/team/" + fileName + " Remember this will be deleted in 24 hours", channel);
+        normalbot.sendMessage(src, "Your team can be found here: http://server.pokemon-online.eu/team/" + fileName + " Remember this will be deleted in 24 hours", channel);
         return;
     }
     if (command === "cjoin") {
@@ -642,6 +707,30 @@ exports.handleCommand = function (src, command, commandData, tar, channel) {
         }
         return commandData;
     }
+    function tierBans(commandData) {
+        var stone = 0, aforme;
+        if (commandData.indexOf(" ") !== -1) {
+            stone = sys.stoneForForme(pokeId);
+            aforme = commandData.split(" ");
+            pokeId = sys.pokeNum(aforme[1]);
+        } else {
+            aforme = commandData.split("-");
+            if (sys.isAesthetic(pokeId) || pokeId == sys.pokeNum("Meloetta-S") || pokeId == sys.pokeNum("Darmanitan-D") || pokeId == sys.pokeNum("Aegislash-B")) {
+                pokeId = sys.pokeNum(aforme[0]);
+            }
+        }
+        var tiers = ["ORAS Ubers", "ORAS OU", "ORAS UU", "ORAS LU", "ORAS NU", "ORAS LC"];
+        var allowed = [];
+        for (var x = 0; x < tiers.length; x++) {
+            if (sys.isItemBannedFromTier(stone, tiers[x])) {
+                break;
+            }
+            if (!sys.isPokeBannedFromTier(pokeId, tiers[x])) {
+                allowed.push(tiers[x]);
+            }
+        }
+        return allowed.join(", ");
+    }
     
     if (command === "pokemon") {
         if (commandData === undefined) {
@@ -653,19 +742,6 @@ exports.handleCommand = function (src, command, commandData, tar, channel) {
         commandData = commandData[0];
         var pokeId;
         if (isNaN(commandData)) {
-            switch (commandData.toLowerCase()) {
-                case ("darmanitan-z") :
-                    commandData = "Darmanitan-D";
-                    break;
-                case ("meloetta-p") :
-                    commandData = "Meloetta-S";
-                    break;
-                case ("hoopa-u") :
-                    commandData = "Hoopa-B";
-                    break;
-                default:
-                    commandData=commandData;
-            }
             pokeId = sys.pokeNum(commandData);
         } else {
             if (commandData < 1 || commandData > 721) {
@@ -728,28 +804,8 @@ exports.handleCommand = function (src, command, commandData, tar, channel) {
             }
         }
 
-        var stone = 0, aforme;
-        if (commandData.indexOf(" ") !== -1) {
-            stone = sys.stoneForForme(pokeId);
-            aforme = commandData.split(" ");
-            pokeId = sys.pokeNum(aforme[1]);
-        } else {
-            aforme = commandData.split("-");
-            if (sys.isAesthetic(pokeId)) {
-                pokeId = sys.pokeNum(aforme[0]);
-            }
-        }
-        var tiers = ["ORAS Ubers", "ORAS OU", "ORAS UU", "ORAS LU", "ORAS NU", "ORAS LC"];
-        var allowed = [];
-        for (var x = 0; x < tiers.length; x++) {
-            if (sys.isItemBannedFromTier(stone, tiers[x])) {
-                break;
-            }
-            if (!sys.isPokeBannedFromTier(pokeId, tiers[x])) {
-                allowed.push(tiers[x]);
-            }
-        }
-        sys.sendHtmlMessage(src, "<b>Allowed in tiers: </b>" + allowed.join(", "), channel);
+        var allowed = tierBans(commandData);
+        sys.sendHtmlMessage(src, "<b>Allowed in tiers: </b>" + allowed, channel);
         return;
     }
     if (command === "tier") {
@@ -760,28 +816,8 @@ exports.handleCommand = function (src, command, commandData, tar, channel) {
             return;
         }
 
-        var stone = 0, aforme;
-        if (commandData.indexOf(" ") !== -1) {
-            stone = sys.stoneForForme(pokeId);
-            aforme = commandData.split(" ");
-            pokeId = sys.pokeNum(aforme[1]);
-        } else {
-            aforme = commandData.split("-");
-            if (sys.isAesthetic(pokeId)) {
-                pokeId = sys.pokeNum(aforme[0]);
-            }
-        }
-        var tiers = ["ORAS Ubers", "ORAS OU", "ORAS UU", "ORAS LU", "ORAS NU", "ORAS LC"];
-        var allowed = [];
-        for (var x = 0; x < tiers.length; x++) {
-            if (sys.isItemBannedFromTier(stone, tiers[x])) {
-                break;
-            }
-            if (!sys.isPokeBannedFromTier(pokeId, tiers[x])) {
-                allowed.push(tiers[x]);
-            }
-        }
-        sys.sendHtmlMessage(src, "<b>" + sys.pokemon(sys.pokeNum(commandData)) + " is allowed in tiers: </b>" + allowed.join(", "), channel);
+        var allowed = tierBans(commandData);
+        sys.sendHtmlMessage(src, "<b>" + sys.pokemon(sys.pokeNum(commandData)) + " is allowed in tiers: </b>" + allowed, channel);
         return;
     }
     if (command === "move") {
@@ -972,15 +1008,20 @@ exports.handleCommand = function (src, command, commandData, tar, channel) {
         if (commandData[1] && commandData[1] < sys.teamCount(src) - 1) {
             team = commandData[1];
         }
-        if (tier && tier_checker.has_legal_team_for_tier(src, team, tier)) {
-            sys.changeTier(src, team, tier);
-            if (tier === "Battle Factory" || tier === "Battle Factory 6v6") {
-                require("battlefactory.js").generateTeam(src, team);
+        if (tier) {
+            if (!tier_checker.has_legal_team_for_tier(src, team, tier)) {
+                normalbot.sendMessage(src, "You cannot switch to " + tier + ".", channel);
             }
-            normalbot.sendMessage(src, "You switched to " + tier, channel);
+            else {
+                sys.changeTier(src, team, tier);
+                if (tier === "Battle Factory" || tier === "Battle Factory 6v6") {
+                    require("battlefactory.js").generateTeam(src, team);
+                }
+                normalbot.sendMessage(src, "You switched to " + tier + ".", channel);
+            }
             return;
         }
-        normalbot.sendMessage(src, "You cannot switch to " + commandData[0], channel);
+        normalbot.sendMessage(src, commandData[0] + " is not a valid tier.", channel);
         return;
     }
     if (command === "invitespec") {
@@ -1035,7 +1076,7 @@ exports.help = [
     "*** Pokémon Info ***",
     "/ability [ability]: Displays basic information for that ability.",
     "/canlearn: Shows if a Pokémon can learn a certain move. Format is /canlearn [Pokémon]:[move].",
-    "/dwreleased [Pokémon]: Shows the released status of a Pokémon's Dream World Ability.",
+    // "/dwreleased [Pokémon]: Shows the released status of a Pokémon's Dream World Ability.",
     "/item [item]: Displays basic information for that item.",
     "/move [move]: Displays basic information for that move.",
     "/nature [nature]: Shows the effects of a nature. Leave blank to show all natures.",

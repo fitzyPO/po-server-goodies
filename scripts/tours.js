@@ -1,4 +1,4 @@
-
+﻿
 /*
 Code for tours.js
 Original coding by Shadowfist 2012
@@ -22,17 +22,17 @@ var allgentiers = cctiers.concat("Metronome");
 //Tiers that are BF or CC. These also allow others to watch
 var ccbftiers = cctiers.concat("Battle Factory", "Battle Factory 6v6");
 //Tiers with double elim by default
-var doubleelimtiers = ["CC 1v1", "Wifi CC 1v1", "Gen 5 1v1", "Gen 5 1v1 Ubers", "ORAS 1v1", "Hackmons CC 1v1", "Hackmons Wifi CC 1v1", "Flash Clash"];
+var doubleelimtiers = ["CC 1v1", "Wifi CC 1v1", "Gen 5 1v1", "Gen 5 1v1 Ubers", "ORAS 1v1", "Hackmons CC 1v1", "Hackmons Wifi CC 1v1"];
 //Tiers that are locked to Singles Mode
-var singlesonlytiers = ["Gen 5 1v1", "Gen 5 1v1 Ubers", "CC 1v1", "Wifi CC 1v1", "GBU Singles", "Adv Ubers", "Adv OU", "DP Ubers", "DP OU", "No Preview OU", "No Preview Ubers", "Wifi OU", "Wifi Ubers", "Flash Clash", "Hackmons CC 1v1", "Hackmons Wifi CC 1v1"];
+var singlesonlytiers = ["Gen 5 1v1", "Gen 5 1v1 Ubers", "CC 1v1", "Wifi CC 1v1", "GBU Singles", "Adv Ubers", "Adv OU", "DP Ubers", "DP OU", "No Preview OU", "No Preview Ubers", "Wifi OU", "Wifi Ubers", "Hackmons CC 1v1", "Hackmons Wifi CC 1v1"];
 //Tiers with Team Preview state that can't be modified
-var previewlockedtiers = ["CC 1v1", "Wifi CC 1v1", "Wifi Ubers", "Wifi OU", "No Preview Ubers", "No Preview OU", "Wifi Triples", "Wifi Uber Triples", "No Preview OU Triples", "No Preview Uber Triples", "Wifi OU Doubles", "Wifi Uber Doubles", "No Preview OU Doubles", "No Preview Uber Doubles", "Flash Clash"];
+var previewlockedtiers = ["CC 1v1", "Wifi CC 1v1", "Wifi Ubers", "Wifi OU", "No Preview Ubers", "No Preview OU", "Wifi Triples", "Wifi Uber Triples", "No Preview OU Triples", "No Preview Uber Triples", "Wifi OU Doubles", "Wifi Uber Doubles", "No Preview OU Doubles", "No Preview Uber Doubles"];
 //Tiers used when queue is empty
-var autotiers = ["Challenge Cup", "CC 1v1", "Wifi CC 1v1", "ORAS Ubers", "ORAS OU", "Battle Factory 6v6", "Monotype", "ORAS 1v1", "Flash Clash", "Hackmons Challenge Cup", "Inverted Challenge Cup"];
+var autotiers = ["Challenge Cup", "CC 1v1", "Wifi CC 1v1", "ORAS Ubers", "ORAS OU", "Battle Factory 6v6", "Monotype", "ORAS 1v1", "Hackmons Challenge Cup", "Inverted Challenge Cup"];
 
 //Clause List
 var clauselist = ["Sleep Clause", "Freeze Clause", "Disallow Spects", "Item Clause", "Challenge Cup", "No Timeout", "Species Clause", "Team Preview", "Self-KO Clause", "Inverted Battle"];
-    
+
 if (typeof tourschan !== "string") {
     tourschan = sys.channelId("Tournaments");
 }
@@ -65,11 +65,13 @@ var configDir = "scriptdata/tourconfig/";
 var dataDir = "scriptdata/tourdata/";
 var utilities = require('utilities.js');
 var html_escape = require('utilities.js').html_escape;
+var AutoTeams = require("autoteams.js");
 var tstats = require("newtourstats.js");
 var border = "»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»»:";
 var htmlborder = "<font color=#3DAA68><b>"+border+"</b></font>";
 var blueborder = "<font color=#0044BB><b>"+border+"</b></font>";
 var flashtag = "<!--f-->"; // This is used to check for flashes in the html code
+var signupMessageDelay = 0;
 // Event tournaments highlighted in red
 var redborder = "<font color=#FF0000><b>"+border+"</b></font>";
 var redhtmlborder = "<font color=#FF0000><timestamp/> <b>"+border+"</b></font>";
@@ -189,7 +191,7 @@ function sendBotMessage(user, message, chan, html) {
 function sendBotAll(message, chan, html) {
     var staffchan = sys.channelId("Indigo Plateau");
     var tachan = sys.channelId("Victory Road");
-    
+
     switch (chan) {
         case "all": chan = [-1]; break;
         case "~mt": chan = [tourschan, 0]; break;
@@ -197,7 +199,7 @@ function sendBotAll(message, chan, html) {
         case "~tr": chan = [tourschan, tachan]; break;
         default: chan = [chan]; break;
     }
-    
+
     if (html) {
         for (var x in chan) {
             sendChanHtmlAll("<font color="+tourconfig.tourbotcolour+"><timestamp/><b>"+tourconfig.tourbot+"</b></font>"+message,chan[x]);
@@ -932,6 +934,9 @@ function tourStep() {
     if (tours.eventticks > 0) {
         tours.eventticks -= 1;
     }
+    if (signupMessageDelay > 0) {
+        signupMessageDelay -= 1;
+    }
     for (var x in tours.tour) {
         var rtime = tours.tour[x].time-systime;
         if ((rtime <= 10 && rtime >= 0) || rtime%30 === 0) {
@@ -944,9 +949,11 @@ function tourStep() {
             }
             if (tours.tour[x].time-systime == 60) {
                 sendBotAll("Signups for the "+getFullTourName(x)+" tournament close in 1 minute.", "~mt", false);
+                signupMessageDelay = 10; //prevents double messages
             }
             else if (tours.tour[x].time-systime == 30 && tours.tour[x].parameters.event) {
                 sendBotAll("Signups for the "+getFullTourName(x)+" tournament close in 30 seconds.", "~mt", false);
+                signupMessageDelay = 10; //prevents double messages
             }
             continue;
         }
@@ -1962,7 +1969,7 @@ function tourCommand(src, command, commandData, channel) {
                     if (tours.tour[x].state == "signups") {
                         isSignups = true;
                     }
-                }         
+                }
                 var parameters = {"gen": "default", "mode": modeOfTier(tourtier), "type": doubleelimtiers.indexOf(tourtier) == -1 ? "single" : "double", "maxplayers": false, "event": false, "wifi": (sys.getClauses(tourtier)%256 >= 128 ? true : false)};
                 if (data[1] !== false) {
                     var parameterdata = data[1].split(":");
@@ -2051,7 +2058,7 @@ function tourCommand(src, command, commandData, channel) {
                     else {
                         tours.queue.push({'tier': tourtier, 'starter': sys.name(src), 'parameters': parameters});
                     }
-                    sendBotAll(sys.name(src)+" added a "+tourtier+" tournament into the "+(command == "shift" ? "front of" : "")+" queue! Type /queue to see what is coming up next.",tourschan, false);
+                    sendBotAll(sys.name(src)+" added " + (startsWithVowel(tourtier) ? "an " : "a ") + tourtier + " tournament into the "+(command == "shift" ? "front of" : "")+" queue! Type /queue to see what is coming up next.",tourschan, false);
                 }
                 else {
                     tourstart(tourtier, sys.name(src), tours.key, parameters);
@@ -2271,7 +2278,7 @@ function tourCommand(src, command, commandData, channel) {
                 var tar = data[0];
                 var reason = data[1];
                 var time = 900;
-                if (data.length > 2) {
+                if (data[2]) {
                     time = utilities.getSeconds(data[2]);
                 }
                 var ip = sys.dbIp(tar);
@@ -2416,7 +2423,7 @@ function tourCommand(src, command, commandData, channel) {
             }
             if (!sys.hasTier(src, tours.tour[key].tourtype)) {
                 try {
-                    require("autoteams.js").giveTeam(src, 0, tours.tour[key].tourtype);
+                    AutoTeams.giveTeam(src, 0, tours.tour[key].tourtype);
                     sendBotMessage(src, "Your first team was set to a random " + tours.tour[key].tourtype + " team.", tourschan, false);
                 } catch (error) {
                     var needsteam = ccbftiers.indexOf(tours.tour[key].tourtype) == -1;
@@ -2514,7 +2521,7 @@ function tourCommand(src, command, commandData, channel) {
                     }
                 }
                 if (tours.tour[key].maxplayers === "default") {
-                    if (SESSION.users(src).smute.active) {
+                    if ((SESSION.users(src).smute.active && sys.auth(src) < 1)) {
                         sendBotMessage(src, "<b>"+html_escape(sys.name(src))+"</b> is player #"+tours.tour[key].players.length+" to join the "+html_escape(getFullTourName(key))+" tournament! "+(tours.tour[key].time - parseInt(sys.time(), 10))+" second"+(tours.tour[key].time - parseInt(sys.time(), 10) == 1 ? "" : "s")+" remaining!", tourschan, true);
                     } else {
                         sendBotAll("<b>"+html_escape(sys.name(src))+"</b> is player #"+tours.tour[key].players.length+" to join the "+html_escape(getFullTourName(key))+" tournament! "+(tours.tour[key].time - parseInt(sys.time(), 10))+" second"+(tours.tour[key].time - parseInt(sys.time(), 10) == 1 ? "" : "s")+" remaining!", tourschan, true);
@@ -2525,7 +2532,7 @@ function tourCommand(src, command, commandData, channel) {
                     }
                 }
                 else {
-                    if (SESSION.users(src).smute.active) {
+                    if ((SESSION.users(src).smute.active  && sys.auth(src) < 1)) {
                         sendBotMessage(src, "<b>"+html_escape(sys.name(src))+"</b> is player #"+tours.tour[key].players.length+" to join the "+html_escape(getFullTourName(key))+" tournament! "+(tours.tour[key].maxplayers - tours.tour[key].cpt)+" place"+(tours.tour[key].maxplayers - tours.tour[key].cpt == 1 ? "" : "s")+" remaining!", tourschan, true);
                     } else {
                         sendBotAll("<b>"+html_escape(sys.name(src))+"</b> is player #"+tours.tour[key].players.length+" to join the "+html_escape(getFullTourName(key))+" tournament! "+(tours.tour[key].maxplayers - tours.tour[key].cpt)+" place"+(tours.tour[key].maxplayers - tours.tour[key].cpt == 1 ? "" : "s")+" remaining!", tourschan, true);
@@ -2541,7 +2548,7 @@ function tourCommand(src, command, commandData, channel) {
                 else {
                     tours.tour[key].numjoins[sys.ip(src)] = 1;
                 }
-                if (SESSION.users(src).smute.active) {
+                if ((SESSION.users(src).smute.active && sys.auth(src) < 1)) {
                     var index = tours.tour[key].players.indexOf(src);
                     tours.tour[key].players.splice(index, 1);
                     tours.tour[key].cpt -= 1;
@@ -2568,7 +2575,7 @@ function tourCommand(src, command, commandData, channel) {
                 }
             }
 
-            if (oldname === null || SESSION.users(src).smute.active) { // prevent users from joining tours whilst smuted
+            if (oldname === null || (SESSION.users(src).smute.active && sys.auth(src) < 1)) { // prevent users from joining tours whilst smuted
                 sendBotMessage(src, "There are no subs remaining in the "+getFullTourName(key)+" tournament!",tourschan, false);
                 return true;
             }
@@ -2659,7 +2666,7 @@ function tourCommand(src, command, commandData, channel) {
             } else {
                 var tierName = tours.tour[inTour].tourtype;
                 try {
-                    require("autoteams.js").giveTeam(src, 0, tierName);
+                    AutoTeams.giveTeam(src, 0, tierName);
                     sendBotMessage(src, "Your first team was set to a random " + tierName + " team.", tourschan, false);
                 } catch (error) {
                     sendBotMessage(src, "No teams available for " + tierName + "!", tourschan, false);
@@ -2686,7 +2693,7 @@ function tourCommand(src, command, commandData, channel) {
                     roundtable = "<div style='margin-left: 50px'><b>Round " + tours.tour[y].round + " of the " + tours.tour[y].tourtype + " Tournament</b><table><br/>";
                 }
                 else {
-                    data.push("<b>Round " + tours.tour[y].round + " if the " + tours.tour[y].tourtype + " Tournaments</b>");
+                    data.push("<b>Round " + tours.tour[y].round + " of the " + tours.tour[y].tourtype + " Tournaments</b>");
                 }
                 for (var x=0; x<tours.tour[y].players.length; x+=2) {
                     if (winners.indexOf(tours.tour[y].players[x]) != -1 && tours.tour[y].players[x] != "~Bye~" && tours.tour[y].players[x] != "~DQ~") {
@@ -3220,9 +3227,7 @@ function removesubs(key) {
 // removes byes
 function removebyes(key) {
     try {
-        var currentround = tours.tour[key].round;
-        // if the round advances due to DQ, don't keep checking :x
-        if (!tours.tour.hasOwnProperty(key) || tours.tour[key].round !== currentround) {
+        if (!tours.tour.hasOwnProperty(key)) {
             return;
         }
         var advanced = [];
@@ -3536,7 +3541,23 @@ function tourstart(tier, starter, key, parameters) {
                 sys.sendHtmlMessage(sys.id(x), "<font color=" + tourconfig.tourbotcolour + "><timestamp/><b>"+tourconfig.tourbot+"</b></font><b> You have been flashed!</b><ping/>", staffchan);
             }
         }
-        sendBotAll("Queue in Tournaments is empty" + (activeAuthCount === 0 ? " and there are no megausers logged on." : "."), staffchan, true);
+        sendBotAll("Queue in Tournaments is empty" + (activeAuthCount === 0 ? " and there are no megausers logged on." : ". Automatically adding up to 2 random tiers."), staffchan, true);
+
+        var tourarray = autotiers.shuffle();
+        var checked = 0;
+        var toursAdded = 0;
+        while (checked < tourarray.length && toursAdded < 2) {
+            var tourtier = tourarray[checked];
+            var lasttours = getListOfTours(tourconfig.norepeat);
+            var lastindex = lasttours.indexOf(tourtier);
+            if (lastindex === -1 && tourtier !== tier) {
+                var parameters2 = {"gen": "default", "mode": modeOfTier(tourtier), "type": doubleelimtiers.indexOf(tourtier) == -1 ? "single" : "double", "maxplayers": false, "event": false, "wifi": (sys.getClauses(tourtier)%256 >= 128 ? true : false)};
+                tours.queue.push({'tier': tourtier, 'starter': "Autostarter", 'parameters': parameters2});
+                sendBotAll((startsWithVowel(tourtier) ? "An " : "A ") + tourtier + " tournament was automatically placed into the queue!",tourschan, false);
+                toursAdded++;
+            }
+            checked++;
+        }
     }
     try {
         var channels = tourschan === 0 ? [0] : [0, tourschan];
@@ -3606,14 +3627,14 @@ function tourstart(tier, starter, key, parameters) {
                 sendChanHtmlAll(redhtmlborder, channels[x]);
             }
             if (channels[x] == tourschan || parameters.event) {
-                sendChanHtmlAll("<timestamp/> " + (startsWithVowel(tier) ? "An " : "A ") + "<b><font color='Blue'>"+tier+"</font></b> "+(!tours.tour[key].event ? "tournament" : "event")+" has opened for signups! (Started by <b>"+html_escape(starter)+"</b>)", channels[x]);
+                var arr = sys.playersOfChannel(channels[x]);
+                for (var y in arr) {
+                    sys.sendHtmlMessage(arr[y], "<timestamp/> " + (startsWithVowel(tier) ? "An " : "A ") + "<b>" + (sys.os(arr[y]) === "android" ? "<font color='Blue'>" + tier + "</font>":"<a href='po:send//changetier " + tier + "'>" + tier + "</a>") + "</b> "+(!tours.tour[key].event ? "tournament" : "event")+" has opened for signups! (Started by <b>"+html_escape(starter)+"</b>)", channels[x]);
+                }
                 sendChanAll("CLAUSES: "+getTourClauses(key),channels[x]);
                 sendChanAll("PARAMETERS: "+parameters.mode+" Mode"+(parameters.gen != "default" ? "; Gen: "+getSubgen(parameters.gen,true) : "")+(parameters.type == "double" ? "; Double Elimination" : "")+(parameters.event ? "; Event Tournament" : "")+(wifiuse != "default" ? "; "+wifiuse : ""), channels[x]);
                 if (channels[x] == tourschan) {
                     sendChanHtmlAll("<timestamp/> Type <b>/join</b> to enter the tournament, "+(tours.tour[key].maxplayers === "default" ? "you have "+time_handle(parameters.event ? tourconfig.toursignup*2 : tourconfig.toursignup)+" to join!" : tours.tour[key].maxplayers+" places are open!"), channels[x]);
-                    if (require("autoteams.js").teamsAvailable(tier)) {
-                        sendChanHtmlAll("<timestamp/> Teams will be automatically assigned if you do not have one.", channels[x]);
-                    }
                 }
                 else {
                     sendChanAll(tourconfig.tourbot+"Go to the #"+sys.channel(tourschan)+" channel (Use /cjoin Tournaments) and type /join to enter the tournament!", channels[x]);
@@ -3623,6 +3644,9 @@ function tourstart(tier, starter, key, parameters) {
             else {
                 sendChanHtmlAll("<timestamp/> " + (startsWithVowel(tier) ? "An " : "A ") + "<b><font color='Blue'>"+tier+"</font></b> "+(!tours.tour[key].event ? "tournament" : "event")+" has opened for signups!", channels[x]);
                 sendChanHtmlAll("<timestamp/> Go to the <a href='po:join/Tournaments'>#Tournaments</a>  channel (Use /cjoin Tournaments) and type /join to enter the tournament!", channels[x]);
+            }
+            if (AutoTeams.teamsAvailable(tier)) {
+                sendChanHtmlAll("<timestamp/> <b>Don't have a team? Don't worry the server will provide one when you join!</b>", channels[x]);
             }
             if (!parameters.event) {
                 sendChanAll(border, channels[x]);

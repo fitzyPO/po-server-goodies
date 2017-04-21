@@ -17,6 +17,35 @@ exports.handleCommand = function (src, command, commandData, tar, channel) {
         normalbot.sendMessage(src, "You turned rainbow on!", channel);
         return;
     }*/
+    if (command === "addwatch") {
+        var i = commandData.split(":");
+        var name = i[0];
+        var comment = i[1] || '-';
+        if (i.length !== 2) {
+            normalbot.sendMessage(src, "The format is (user):(comment)", channel);
+            return;
+        }
+        if (sys.dbIp(name) === undefined) {
+            normalbot.sendMessage(src, name + " is not a valid user.", channel);
+            return;
+        }
+        script.namesToWatch.add(name.toLowerCase(), comment + " ~ " + sys.name(src));
+        normalbot.sendAll(name + " was added to the watch list by " + sys.name(src) + ".", staffchannel);
+        return;
+    }
+    if (command == "removewatch") {
+        var name = commandData;
+        if (script.namesToWatch.get(name.toLowerCase()) !== undefined) {
+            script.namesToWatch.remove(name.toLowerCase());
+            normalbot.sendAll(name + " was removed from the watch list by " + sys.name(src) + ".", staffchannel);
+            return;
+        }
+        else {
+            normalbot.sendMessage(src, name + " is not in the watch list.", channel);
+            return;
+        }
+        return;
+    }
     if (command === "toggleweblinks") {
         if (commandData === "off") {
             SESSION.global().blockWebLinks = true;
@@ -27,11 +56,11 @@ exports.handleCommand = function (src, command, commandData, tar, channel) {
         normalbot.sendMessage(src, "Webclient users can send clickable hyperlinks again.", channel);
         return;
     }
-    if (command === "indigoinvite") {
-        if (channel !== staffchannel && channel !== sachannel) {
+    if (command === "indigoinvite" || command === "forceinvite") {
+        /*if (channel !== staffchannel && channel !== sachannel) {
             normalbot.sendMessage(src, "Can't use on this channel.", channel);
             return;
-        }
+        }*/
         if (tar === undefined) {
             normalbot.sendMessage(src, "Your target is not online.", channel);
             return;
@@ -47,21 +76,6 @@ exports.handleCommand = function (src, command, commandData, tar, channel) {
         } else {
             normalbot.sendMessage(src, sys.name(tar) + " is already in this channel!", channel);
         }
-        return;
-    }
-    if (command === "indigodeinvite") {
-        var count = 0;
-        var players = sys.playerIds();
-        var players_length = players.length;
-        for (var i = 0; i < players_length; ++i) {
-            var current_player = players[i];
-            if (sys.isInChannel(current_player, staffchannel) && !script.canJoinStaffChannel(current_player)) {
-                sys.kick(current_player, staffchannel);
-                SESSION.channels(channel).takeAuth(src, sys.name(current_player), "member");
-                count = 1;
-            }
-        }
-        normalbot.sendAll("" + count + " unwanted visitors were kicked...", staffchannel);
         return;
     }
     if (command === "destroychan") {
@@ -111,7 +125,7 @@ exports.handleCommand = function (src, command, commandData, tar, channel) {
                 return;
             }
         }
-        
+
         if (script.isTempBanned(ip)) {
             sys.unban(commandData); //needed as at the moment bans don't overwrite tempbans
         }
@@ -161,6 +175,7 @@ exports.handleCommand = function (src, command, commandData, tar, channel) {
         }
         sys.writeToFile(Config.dataDir+"nameBans.json", JSON.stringify(serialized));
         normalbot.sendMessage(src, "You banned: " + regex.toString(), channel);
+        script.refreshNamebans();
         return;
     }
     if (command === "nameunban") {
@@ -182,6 +197,7 @@ exports.handleCommand = function (src, command, commandData, tar, channel) {
                 serialized.nameBans.push(nameBans[i].source);
             }
             sys.writeToFile(Config.dataDir+"nameBans.json", JSON.stringify(serialized));
+            script.refreshNamebans();
         }
         return;
     }
@@ -266,7 +282,7 @@ exports.handleCommand = function (src, command, commandData, tar, channel) {
     }
     if (command === "watchlog") {
         var log = sys.getFileContent(Config.dataDir+"watchNamesLog.txt");
-        
+
         if (log) {
             log = log.split("\n");
             if (!commandData) {
@@ -314,7 +330,7 @@ exports.handleCommand = function (src, command, commandData, tar, channel) {
                     if (!log[e]) {
                         continue;
                     }
-                    
+
                     var params = log[e].split(":::");
                     var msg = "Players: {0} and {1} -- Winner: {2} -- Forfeit: {3} -- Tier: {4} -- Time: {5} -- {0}'s IP: {6} -- {1}'s IP: {7}";
                     normalbot.sendMessage(src, msg.format(params[0], params[1], params[2], params[3], params[4], params[5], params[6], params[7]), channel);
@@ -326,7 +342,7 @@ exports.handleCommand = function (src, command, commandData, tar, channel) {
         }
         return;
     }
-       
+
     if (command == "cookieban" || command == "cookiemute") {
         if (!commandData) {
             return;
@@ -341,7 +357,7 @@ exports.handleCommand = function (src, command, commandData, tar, channel) {
             return;
         }
         if (command == "cookiemute") {
-            SESSION.users(tar).activate("smute", Config.kickbot, 0, "Cookie", true);
+            SESSION.users(tar).activate("smute", Config.kickbot, parseInt(sys.time(), 10) + 86400, "Cookie", true);
             kickbot.sendAll(commandData + " was smuted by cookie", staffchannel);
         }
         var type = (command === "cookieban" ? "banned" : "muted");
@@ -363,19 +379,18 @@ exports.handleCommand = function (src, command, commandData, tar, channel) {
         }
         var type = (command === "cookieunban" ? "unbanned" : "unmuted");
         script.namesToUnban.add(commandData.toLowerCase(), "true");
-        normalbot.sendAll(commandData.toCorrectCase() + " was cookie " + type, staffchannel);
+        normalbot.sendAll(commandData.toCorrectCase() + " was cookie " + type + " by " + sys.name(src) + ".", staffchannel);
         return;
     }
-    
     if (command === "whobanned") {
         if (!commandData) {
             normalbot.sendMessage(src, "No name entered", channel);
             return;
         }
         var banned = sys.getFileContent("bans.txt").split("\n").filter(function(s) {
-            return s.toLowerCase().indexOf(commandData.toLowerCase()) != -1;
+            return s.toLowerCase().indexOf(commandData.toLowerCase()) != -1 + " ";
         });
-        normalbot.sendMessage(src, banned, channel);
+        normalbot.sendMessage(src, banned.length > 1 ? banned : commandData + " has no current bans", channel);
         return;
     }
     if (command == "idban" || command == "idmute") {
@@ -403,7 +418,7 @@ exports.handleCommand = function (src, command, commandData, tar, channel) {
         script.idBans.add(id, JSON.stringify(banInfo));
         normalbot.sendAll(commandData.toCorrectCase() + " was ID " + type + " by " + sys.name(src) + ". [" + sys.os(tar) + ", v" + sys.version(tar) + "]", staffchannel);
         if (type == "muted") {
-            SESSION.users(tar).activate("smute", Config.kickbot, 0, "ID", true);
+            SESSION.users(tar).activate("smute", Config.kickbot, parseInt(sys.time(), 10) + 86400, "ID", true);
         } else {
             sys.kick(tar);
         }
@@ -416,7 +431,7 @@ exports.handleCommand = function (src, command, commandData, tar, channel) {
         var type = (command === "idunban" ? "unbanned" : "unmuted");
         var banInfo = script.idBans.get(commandData);
         if (banInfo) {
-            var tar = banInfo.name;
+            var tar = JSON.parse(banInfo).name;
             script.idBans.remove(commandData);
             if (banInfo.type == "muted") {
                 script.unban("smute", Config.kickbot, tar, commandData);
@@ -425,6 +440,54 @@ exports.handleCommand = function (src, command, commandData, tar, channel) {
             return;
         }
         normalbot.sendMessage(src, "ID not found", channel);
+        return;
+    }
+    if (command === "ultraban") {
+        if (!commandData) {
+            normalbot.sendMessage(src, "No player exists by this name!", channel);
+            return;
+        }
+        var name = commandData.toCorrectCase();
+        var ip = sys.dbIp(name);
+        if (!ip) {
+            normalbot.sendMessage(src, "No player exists by this name!", channel);
+            return;
+        }
+        if (sys.maxAuth(ip) > 0) {
+            normalbot.sendMessage(src, "Ultraban doesn't work on auth.", channel);
+            return;
+        }
+        var id = sys.id(name);
+        var os = sys.os(id);
+        var version = sys.version(id);
+        var banner = sys.name(src);
+        var bansApplied = [];
+        if (sys.loggedIn(id)) {
+            if (sys.os(tar) !== "android" && sys.version(tar) > 2402 || sys.os(tar) === "android" && sys.version(tar) > 37) {
+                sys.setCookie(tar, "banned " + name);
+                bansApplied.push("cookie");
+            }
+            if (sys.uniqueId(id)) {
+                var banInfo = {"name": name, "ip": ip, "banner": banner, "type": "banned", "psuedo": !sys.uniqueId(id).isUnique };
+                script.idBans.add(id, JSON.stringify(banInfo));
+                bansApplied.push("id");
+            }
+        }
+        os = os.charAt(0).toUpperCase() + os.slice(1);
+        normalbot.sendAll("Target: " + name + ", IP: " + ip + ", OS: " + os + ", Version: " + version, staffchannel);
+        sendChanHtmlAll("<b><font color=red>" + name + " was banned by " + nonFlashing(banner) + "!</font></b>",-1);
+        if (script.isTempBanned(ip)) {
+            sys.unban(commandData); //needed as at the moment bans don't overwrite tempbans
+        }
+        sys.ban(commandData);
+        bansApplied.push("ip");
+        script.kickAll(ip);
+
+        normalbot.sendAll("The following bans were applied: " + bansApplied.join(", "), staffchannel);
+        sys.appendToFile("bans.txt", banner + " ultrabanned " + name + "\n");
+        var authName = banner.toLowerCase();
+        script.authStats[authName] =  script.authStats[authName] || {};
+        script.authStats[authName].latestBan = [name, parseInt(sys.time(), 10)];
         return;
     }
     // hack, for allowing some subset of the owner commands for super admins
@@ -441,13 +504,17 @@ exports.handleCommand = function (src, command, commandData, tar, channel) {
 exports.help = [
     "/ban [ip/name]: Bans a user. /unban to unban.",
     "/cookieban [name]: Bans an online target by cookie. /cookieunban to unban.",
-    "/cookiemute [name]: Puts an online android target on an autosmute list by cookie. /cookiemute to unmute.",
+    "/cookiemute [name]: Puts an online target on an autosmute list by cookie. /cookieunmute to unmute.",
+    "/idban [name]: Bans an online target by ID. /idunban [id] to unban.",
+    "/idmute [name]: Puts an online target on an autosmute list by ID. /idunmute [id] to unmute.",
+    "/ultraban [name]: Bans an online target by IP, cookie and ID.",
     "/channelnameban [name]: Adds a regexp ban on channel names. /channelnameunban to unban.",
     "/destroychan [name]: Destroy a channel (official channels are protected).",
     "/nameban [name]: Adds a regexp ban on usernames. /nameunban to unban.",
     "/namewarn [name]: Adds a regexp namewarning. /nameunwarn to unwarn.",
-    "/indigoinvite [name]: To invite somebody to staff channels. /indigodeinvite to deinvite.",
+    "/forceinvite [name]: To force a user to join a specific channel.",
 //  "/memorydump: Shows the state of the memory.",
     "/toggleweblinks [on/off]: Allows or disallows webclient users to send clickable urls.",
+    "/[add/remove]watch: Adds a user to a watch list to track their battle activity. Format is /addwatch user:comment.",
     "/watchlog: Search the watch log. Accepts /watch 15 (last 15 entries), /watch 10-20 (last 10 to 20) and /watch 10:[Word] (entries that contain that word)."
 ];
